@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User - Authentication
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  organizationMemberships OrganizationMember[]
+  createdProjects         Project[]            @relation("CreatedProjects")
+
+  @@index([email])
+}
+
+// Organization - Groups users and projects
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  members OrganizationMember[]
+  projects Project[]
+
+  @@index([slug])
+}
+
+model OrganizationMember {
+  id             String         @id @default(uuid())
+  userId         String
+  organizationId String
+  role           String         @default("MEMBER") // ADMIN, MEMBER
+  joinedAt       DateTime       @default(now())
+
+  // Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+// Project - Owns multiple queues
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Foreign keys
+  organizationId String
+  createdById    String
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("CreatedProjects", fields: [createdById], references: [id], onDelete: Cascade)
+  queues       Queue[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([createdById])
+}
+
+// Queue - Job queue configuration
+model Queue {
+  id               String   @id @default(uuid())
+  name             String
+  description      String?
+  priority         Int      @default(0) // Higher number = higher priority
+  concurrencyLimit Int      @default(5)
+  isPaused         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Foreign keys
+  projectId String
+  retryPolicyId String?
+
+  // Relations
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  retryPolicy   RetryPolicy?   @relation(fields: [retryPolicyId], references: [id])
+  jobs          Job[]
+  scheduledJobs ScheduledJob[]
+
+  @@index([projectId])
+  @@index([priority])
+  @@index([isPaused])
+}
+
+// RetryPolicy - Configurable retry strategies
+model RetryPolicy {
+  id          String   @id @default(uuid())
+  name        String
+  strategy    String   @default("FIXED") // FIXED, LINEAR, EXPONENTIAL
+  maxRetries  Int      @default(3)
+  delayMs     Int      @default(1000)
+  maxDelayMs  Int      @default(30000)
+  backoffFactor Float?  @default(2.0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  queues Queue[]
+
+  @@index([strategy])
+}
+
+// Job - Core job entity
+model Job {
+  id          String   @id @default(uuid())
+  status      String   @default("QUEUED") // QUEUED, SCHEDULED, CLAIMED, RUNNING, COMPLETED, FAILED, DEAD_LETTER
+  jobType     String   // IMMEDIATE, DELAYED, SCHEDULED, RECURRING, BATCH
+  payload     Json     // Job data
+  priority    Int      @default(0)
+  scheduledFor DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  lastError   String?
+  retryCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Foreign keys
+  queueId      String
+  workerId     String?
+  parentJobId  String? // For batch jobs
+  deadLetterReason String?
+
+  // Relations
+  queue        Queue          @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  worker       Worker?        @relation(fields: [workerId], references: [id])
+  parentJob    Job?           @relation("ParentJob", fields: [parentJobId], references: [id])
+  childJobs    Job[]          @relation("ParentJob")
+  executions   JobExecution[]
+  logs         JobLog[]
+
+  @@index([queueId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@index([priority])
+  @@index([workerId])
+}
+
+// JobExecution - Tracks each execution attempt
+model JobExecution {
+  id        String   @id @default(uuid())
+  status    String   // RUNNING, COMPLETED, FAILED
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  error     String?
+  output    Json?
+  createdAt DateTime @default(now())
+
+  // Foreign keys
+  jobId String
+  workerId String?
+
+  // Relations
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker Worker? @relation(fields: [workerId], references: [id])
+
+  @@index([jobId])
+  @@index([workerId])
+}
+
+// JobLog - Detailed logs for debugging
+model JobLog {
+  id        String   @id @default(uuid())
+  level     String   // INFO, WARN, ERROR, DEBUG
+  message   String
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  // Foreign keys
+  jobId String
+
+  // Relations
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([level])
+  @@index([timestamp])
+}
+
+// ScheduledJob - For cron/recurring jobs
+model ScheduledJob {
+  id          String   @id @default(uuid())
+  cronExpression String
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  isActive    Boolean  @default(true)
+  payload     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Foreign keys
+  queueId String
+
+  // Relations
+  queue Queue @relation(fields: [queueId], references: [id], onDelete: Cascade)
+
+  @@index([queueId])
+  @@index([nextRunAt])
+  @@index([isActive])
+}
+
+// Worker - Worker instances
+model Worker {
+  id           String   @id @default(uuid())
+  name         String
+  status       String   @default("IDLE") // IDLE, BUSY, OFFLINE
+  currentJobId String?
+  lastHeartbeat DateTime @default(now())
+  startedAt    DateTime @default(now())
+  shutdownAt   DateTime?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  jobs            Job[]
+  executions      JobExecution[]
+  heartbeats      WorkerHeartbeat[]
+
+  @@index([status])
+  @@index([lastHeartbeat])
+}
+
+// WorkerHeartbeat - Tracks worker liveness
+model WorkerHeartbeat {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  metadata  Json?
+
+  // Foreign keys
+  workerId String
+
+  // Relations
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@index([timestamp])
+}
+
+// DeadLetterJob - Permanent failures
+model DeadLetterJob {
+  id          String   @id @default(uuid())
+  originalJobId String
+  reason      String
+  payload     Json
+  queueName   String
+  failedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([originalJobId])
+  @@index([queueName])
+}
