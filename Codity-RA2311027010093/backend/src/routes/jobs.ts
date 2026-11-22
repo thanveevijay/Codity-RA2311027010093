@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { body, validationResult, query } from 'express-validator';
 import prisma from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
@@ -9,7 +9,7 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get('/', async (req, res) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const { queueId, status, limit = 20, offset = 0 } = req.query;
 
@@ -42,7 +42,7 @@ router.post(
     body('jobType').isIn(['IMMEDIATE', 'DELAYED', 'SCHEDULED', 'RECURRING', 'BATCH']),
     body('payload').exists(),
   ],
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -67,7 +67,7 @@ router.post(
   }
 );
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const job = await prisma.job.findUnique({
       where: { id: req.params.id },
@@ -90,7 +90,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/:id/retry', async (req, res) => {
+router.post('/:id/retry', async (req: Request, res: Response) => {
   try {
     const job = await prisma.job.findUnique({ where: { id: req.params.id } });
     if (!job) {
