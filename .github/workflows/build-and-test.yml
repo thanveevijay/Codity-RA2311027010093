@@ -20,9 +20,25 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jobscheduler_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d jobscheduler_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: Codity-RA2311027010093/backend
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jobscheduler_test?schema=public
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,6 +47,8 @@ jobs:
       - run: npm install
       - name: Generate Prisma client
         run: npx prisma generate
+      - name: Apply schema to test database
+        run: npx prisma db push
       - run: npm run build
       - run: npm test
 
