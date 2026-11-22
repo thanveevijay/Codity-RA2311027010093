@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import { Prisma } from '@prisma/client';
 import logger from '../lib/logger';
 
 export class JobService {
@@ -133,11 +134,15 @@ export class JobService {
 
       if (!job) throw new Error('Job not found');
 
+      const payload = job.payload === null
+        ? Prisma.JsonNull
+        : (job.payload as Prisma.InputJsonValue);
+
       await tx.deadLetterJob.create({
         data: {
           originalJobId: job.id,
           reason,
-          payload: job.payload,
+          payload,
           queueName: job.queue.name,
           failedAt: new Date(),
         },
