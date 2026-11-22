@@ -1,0 +1,48 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Codity-RA2311027010093/backend/**"
+      - "Codity-RA2311027010093/frontend/**"
+      - ".github/workflows/build-and-test.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Codity-RA2311027010093/backend/**"
+      - "Codity-RA2311027010093/frontend/**"
+      - ".github/workflows/build-and-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Codity-RA2311027010093/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - run: npm run build
+      - run: npm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Codity-RA2311027010093/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npm run build
