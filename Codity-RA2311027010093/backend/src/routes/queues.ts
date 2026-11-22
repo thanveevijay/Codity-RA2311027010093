@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { body, validationResult, query } from 'express-validator';
 import prisma from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get('/', async (req, res) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const queues = await prisma.queue.findMany({
       include: {
@@ -47,7 +47,7 @@ router.post(
     body('priority').optional().isInt(),
     body('concurrencyLimit').optional().isInt(),
   ],
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -77,7 +77,7 @@ router.post(
   }
 );
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const queue = await prisma.queue.findUnique({
       where: { id: req.params.id },
@@ -95,7 +95,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.put('/:id/pause', async (req, res) => {
+router.put('/:id/pause', async (req: Request, res: Response) => {
   try {
     const queue = await prisma.queue.update({
       where: { id: req.params.id },
@@ -110,7 +110,7 @@ router.put('/:id/pause', async (req, res) => {
   }
 });
 
-router.put('/:id/resume', async (req, res) => {
+router.put('/:id/resume', async (req: Request, res: Response) => {
   try {
     const queue = await prisma.queue.update({
       where: { id: req.params.id },
